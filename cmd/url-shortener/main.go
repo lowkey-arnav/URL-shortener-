@@ -5,6 +5,10 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/arnavkulkarni127-stack/URL-shortener-/internal/handler"
 	"github.com/arnavkulkarni127-stack/URL-shortener-/internal/store"
@@ -14,14 +18,21 @@ import (
 
 func main() {
 	secret := "my-super-secret-key"
-	conStr := "postgres://postgres:1207@localhost:5432/urlshortener?sslmode=disable" // a connection string to connect to the database
-	rdb := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
-	})
+	conStr := os.Getenv("DATABASE_URL")
+	if conStr == "" {
+		log.Fatal("DATABASE_URL is not set")
+	}
+	redisURL := os.Getenv("REDIS_URL")
+	opt, err := redis.ParseURL(redisURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	rdb := redis.NewClient(opt)
 	if err := rdb.Ping(context.Background()).Err(); err != nil {
 		log.Fatal(err)
 	}
 	log.Println("connected to redis")
+
 	db, err := sql.Open("postgres", conStr) // open a connection pool to the database
 	if err != nil {
 		log.Fatal(err)
@@ -50,5 +61,16 @@ func main() {
 	http.HandleFunc("DELETE /api/v1/links/{code}", h.AuthMiddleware(h.DeleteUserLinks))
 	// API: set of endpoints(routes) your server exposes to the client to use
 
-	http.ListenAndServe(":8080", nil)
+	srv := &http.Server{
+		Addr:              ":8080",
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	go func() { // ran on a differenbt goroutine as the ListenandServe takes forever
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed { // if there is an error and it is not errserverclosed
+			log.Fatal(err)
+		}
+	}()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	<-ctx.Done()
 }
