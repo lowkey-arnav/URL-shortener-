@@ -1,0 +1,9 @@
+#download the compiler, alpine linux, 
+FROM golang:1.27.1-alpine AS builder      
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+# runs go build compiles the app into single binary app at out/server
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/server ./cmd/url-shortener
