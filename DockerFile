@@ -7,3 +7,11 @@ RUN go mod download
 COPY . .
 # runs go build compiles the app into single binary app at out/server
 RUN CGO_ENABLED=0 GOOS=linux go build -o /out/server ./cmd/url-shortener
+
+# simple linux image is taken from the above steps where an user is added so the root features are not accessible. the the singhle executable file is copied to /server which is set as entrypoint further continud on port 8080
+FROM alpine:3.20        
+RUN adduser -D -u 10001 app
+USER app
+COPY --from=builder  /out/server /server
+EXPOSE 8080
+ENTRYPOINT ["/server"]
