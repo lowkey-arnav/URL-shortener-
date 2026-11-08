@@ -1,0 +1,32 @@
+services:
+  app:    # hostname for my application on the network
+    build: .    # instead of pulling an image the docker builds the cxode into image from our dockerfile
+    ports: ["8080:8080"]    #port mapping
+    environment:
+      DATABASE_URL: postgres://postgres:${DB_PASSWORD}@postgres:5432/urlshortener?sslmode=disable
+      REDIS_URL: redis://redis:6379/0     #connrct to the host:reddis
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy    #wait until the postgres containeer is running healthy  
+      redis: 
+        condition: service_started    # just wait for the redis container to start as the rredis take almost noi time to start 
+
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: urlshortener
+    volumes:
+      -  pgdata:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]   # runs postgres is ready every 5 seonds and returns bool
+      interval: 5s
+      timeout: 3s     # IF THE CHECK TAKES more than 3s count as failure
+      retries: 10   #after 10 consecuent failure, mark it unhealthy
+  redis:
+    image: redis:7-alpine
+
+volumes:
+  pgdata:
